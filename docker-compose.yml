@@ -17,4 +17,29 @@ services:
     depends_on:
       - db
       - redis
-      - influxdb
+
+  db:
+    container_name: database
+    hostname: database
+    domainname: database
+    build:
+        context: ./postgresql
+    volumes:
+      - ./postgresql:/app
+      - ./data/db-data:/var/lib/postgresql/data
+    ports:
+        - "5432:5432"
+    # logging:
+    #   driver: "none"
+
+  redis:
+    container_name: redis
+    hostname: redis
+    domainname: redis
+    image: redis:alpine
+    ports:
+        - "6379:6379"
+    volumes:
+      - ./data/redis-data:/data
+    # logging:
+    #   driver: "none"

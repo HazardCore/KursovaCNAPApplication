@@ -1,0 +1,22 @@
+{% extends 'admin/change_form.html' %}
+
+{% load i18n admin_urls %}
+
+{% block submit_buttons_bottom %}
+    <div class="submit-row">
+            <input type="submit" style="background-color: green;" value="Зберегти та продовжити" name="_make_request">
+    </div>
+    
+    {% if obj.application_status == "FAILED" %}
+    <div class="submit-row">
+            <input type="submit" style="background-color: red;" value="Відхилити" name="_rejected">
+            <input type="submit" style="background-color: green;" value="Виконати" name="_auto_executed">
+    </div>
+    {% endif %}
+    {% if obj.application_status == "ON_REVIEW" %}
+    <div class="submit-row">
+            <input type="submit" style="background-color: red;" value="Відхилити" name="_rejected">
+            <input type="submit" style="background-color: green;" value="Виконати" name="_auto_executed">
+    </div>
+    {% endif %}
+{% endblock %}
