@@ -1,0 +1,20 @@
+version: '3'
+ 
+services:
+  # APPLICATION SECTION
+  app:
+    container_name: application
+    build:
+      context: ./django
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./django:/app
+      - ./data/app-media:/vol/web/media
+      - ./data/app-static:/vol/web/static
+    env_file:
+      - ./django/.env
+    depends_on:
+      - db
+      - redis
+      - influxdb

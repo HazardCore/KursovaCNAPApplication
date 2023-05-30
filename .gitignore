@@ -1,0 +1,14 @@
+django/static/*
+django/media/*
+!django/media/admin-interface
+django/*.pid
+data/*
+*.pyc
+**/*.pyc
+__pycache__
+django/ex-report.xlsx
+npm-web/*
+npm-web-internal/*
+internal-cabinet-2/*
+internal-cabinet/*
+django/.env
