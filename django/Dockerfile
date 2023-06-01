@@ -4,7 +4,7 @@ ENV DJANGO_SUPERUSER_PASSWORD root
 ENV PYTHONUNBUFFERED=1
 # COPY ./requirements.txt /requirements.txt
 
-RUN apt-get update && apt-get install -y gcc libc-dev gettext
+RUN apt-get update && apt-get install -y gcc libc-dev libreoffice gettext
 # RUN pip install -r /requirements.txt
 RUN pip install "Django==3.1.1" && pip install \
     django-admin-interface \

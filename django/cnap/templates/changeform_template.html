@@ -16,7 +16,24 @@
     {% if obj.application_status == "ON_REVIEW" %}
     <div class="submit-row">
             <input type="submit" style="background-color: red;" value="Відхилити" name="_rejected">
-            <input type="submit" style="background-color: green;" value="Виконати" name="_auto_executed">
+            <input type="submit" style="background-color: green;" value="Виконати" name="_executed">
     </div>
     {% endif %}
+
+
+
+    {% if obj.application_file %}
+        <script>
+        var url_for_embbed = '{{ obj.application_file.url }}';
+        if (url_for_embbed) {
+                var embbed = document.createElement('embed')
+                embbed.setAttribute('src', url_for_embbed)
+                embbed.setAttribute('type', 'application/pdf')
+                embbed.setAttribute('width', '850px')
+                embbed.setAttribute('height', '800px')
+
+                var tab_child_formsets = document.getElementById('django-tabbed-changeform-admin-tab-2').appendChild(embbed);
+        }
+        </script>
+{% endif %}
 {% endblock %}

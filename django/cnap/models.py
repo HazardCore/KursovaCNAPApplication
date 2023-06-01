@@ -24,6 +24,10 @@ class CertificateApplicationStatusType(models.TextChoices):
     EXECUTED = 'EXECUTED', _('Виконана')  
     REJECTED = 'REJECTED', _('Запит відхилено')  
 
+class TemplateType(models.TextChoices):
+    TYPE_1 = 0, _('Довідка про медичне страхування')
+
+
 # class SoftDeleteManager(models.Manager):
 #     MODE_CHOISE = ['clear', 'deleted', 'all']
 
@@ -94,6 +98,9 @@ class CertificateApplication(models.Model):
              verbose_name='Домашня адреса', help_text='Заповнюється за запитом до міністерства автоматично')
     applicant_medical_ensurance = models.CharField(max_length=512, null=True, blank=True,
              verbose_name='Номер та дата медичного страхування', help_text='Заповнюється за запитом до міністерства автоматично')
+
+    application_file = models.FileField(null=True, blank=True, verbose_name='Заявка в форматі PDF', help_text="У вигляді файлу", max_length=512,)
+    
     
 
     created_at = models.DateTimeField(verbose_name='Дата створення заявки', auto_now_add=True,)
@@ -105,6 +112,37 @@ class CertificateApplication(models.Model):
         ordering = ["id"]
         verbose_name = 'Довідка'
         verbose_name_plural = 'Довідки'
+
+
+class Template(models.Model):
+    main_file = models.FileField(verbose_name="Файл",
+                                 null=True,
+                                 max_length=500)
+    title = models.CharField(verbose_name="Назва", max_length=100,
+                             default='', db_index=True)
+    create_date = models.DateField(verbose_name="Дата створення документа",
+                                   auto_now_add=True, editable=False,
+                                   db_index=True, null=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL,
+                               verbose_name="Автор",
+                               on_delete=models.PROTECT, null=True)
+    request_trigger = models.CharField(verbose_name="Предмет заявки",
+                                       choices=TemplateType.choices,
+                                       max_length=100, db_index=True,
+                                       unique=True,
+                                       error_messages={
+                                           'unique': _(
+                                               "Шаблон цієї заявки вже існує!"), })
+
+    class Meta:
+        verbose_name = 'Шаблон'
+        verbose_name_plural = 'Шаблони'
+
+    def __str__(self):
+        return f'{self.title} від  {self.create_date}'
+
+
+
 
     # def __str__(self):
     #     return self.сertificate_no + " " + self.applicant_fullname

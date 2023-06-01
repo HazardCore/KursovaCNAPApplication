@@ -1,5 +1,7 @@
 import datetime
 
+import json
+
 from django.contrib import admin
 
 from cnap.models import *
@@ -18,8 +20,9 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.forms import *
 from django.http import HttpResponseRedirect
-
 from django.core.files import File
+
+import environ
 
 import requests
 
@@ -30,6 +33,14 @@ from django_tabbed_changeform_admin.admin import DjangoTabbedChangeformAdmin
 from django_admin_multiple_choice_list_filter.list_filters import MultipleChoiceListFilter
 
 from django.contrib.auth.models import Group, Permission
+
+from cnap.generate_docx import template_to_pdf
+
+from django.conf import settings
+
+env = environ.Env()
+MEDIA_URL = getattr(settings, 'MEDIA_URL')
+MEDIA_ROOT = getattr(settings, 'MEDIA_ROOT')
 
 # ------------------------------ MODEL ------------------------------ #
 """
@@ -76,28 +87,56 @@ class CertificateApplicationAdmin(DjangoTabbedChangeformAdmin, RemoveAdminDefaul
     def has_delete_permission(self, request, obj=None): return False
 
     def save_model(self, request, obj, form, change):
+        if obj.application_status == CertificateApplicationStatusType.CREATED:
+            obj.application_status = CertificateApplicationStatusType.PROCESSING
+            obj.save()
 
         if "_make_request" in request.POST:
 
             try:
-                r = requests.get('http://ec2-3-74-215-137.eu-central-1.compute.amazonaws.com:8080/r1/XROAD-TEST/GOV/12341234/DRUGS_UNITED_INFOSYSTEM/get_user_information', headers={'X-Road-Client': 'XROAD-TEST/CNAP/00000001/CNAP_INFO_SYSTEM'})
+                r = requests.get('http://ec2-3-74-215-137.eu-central-1.compute.amazonaws.com:8080/r1/XROAD-TEST/GOV/12341234/DRUGS_UNITED_INFOSYSTEM/get_medical_ensurance?person_unique_code=' + obj.applicant_unique_code, headers={'X-Road-Client': 'XROAD-TEST/CNAP/00000001/CNAP_INFO_SYSTEM'})
                 r.raise_for_status()
 
-                print(r.json())
+                response_data = r.json()
+
+                if response_data['status'] == "success":
+                    obj.applicant_fullname = response_data['data']['person_fullname']
+                    obj.applicant_home_address = response_data['data']['person_home_address']
+                    obj.applicant_medical_ensurance = response_data['data']['person_medical_ensurance']
+                    obj.application_status = CertificateApplicationStatusType.ON_REVIEW
+                else:
+                    obj.failure_reason = response_data['error_text']
+                    obj.application_status = CertificateApplicationStatusType.FAILED
+
             except requests.exceptions.RequestException as err:
                 print ("OOps: Something Else",err)
                 obj.failure_reason = err
+
             except requests.exceptions.HTTPError as errh:
                 print ("Http Error:",errh)
                 obj.failure_reason = err
+
             except requests.exceptions.ConnectionError as errc:
                 print ("Error Connecting:",errc)
                 obj.failure_reason = err
+
             except requests.exceptions.Timeout as errt:
                 print ("Timeout Error:",errt)
                 obj.failure_reason = err
 
-            
+        if "_executed" in request.POST:
+            context = {
+                'applicant_fullname': obj.applicant_fullname,
+                'applicant_home_address': obj.applicant_home_address,
+                'applicant_medical_ensurance': obj.applicant_medical_ensurance,
+            }
+
+            file_uuid = template_to_pdf(context, '/vol/web/media', 0, file_name=str(uuid.uuid4()))
+            obj.application_file = os.path.join(file_uuid + '.pdf')
+
+
+        if "_rejected" in request.POST:
+            print('None')
 
 
             # r = requests.get('http://3.74.215.137:8080/r1/XROAD-TEST/GOV/12341234/DRUGS_UNITED_INFOSYSTEM/get_user_information', params=request.POST, headers={'X-Road-Client': 'XROAD-TEST/CNAP/00000001/CNAP_INFO_SYSTEM'})
@@ -200,6 +239,7 @@ class CertificateApplicationAdmin(DjangoTabbedChangeformAdmin, RemoveAdminDefaul
             'applicant_fullname',
             'applicant_home_address',
             'applicant_medical_ensurance',
+            'application_file',
             'failure_reason',]
         return readfields
     #                 'sent_externally_by', 'sent_externally_at', 'created_by', 'confirmed_by', 'confirmed_at', 'signed_by', 'signed_at', 'operator_legal_basis',
@@ -255,22 +295,20 @@ class CertificateApplicationAdmin(DjangoTabbedChangeformAdmin, RemoveAdminDefaul
             'applicant_home_address',
             'applicant_medical_ensurance',
             'failure_reason',
+            'application_file',
             'created_at',
             'updated_at',
         ],
         "classes": ["tab-detail"]}),
-        # ('Додаткові відомості (при відправці зовнішніми засобами)', {'fields': [
-        #     'additional_application_copy',
-        #     'application_external_sign_uploaded',
-        #     'registration_no',
-        #     'registration_date',
-        # ],
-        # "classes": ["tab-detail"]}),
+        ('Заявка', {'fields': [
+            'application_file',
+        ],
+        "classes": ["tab-meta"]}),
     ]
 
     tabs = [
         ("Деталі", ["tab-detail"]),
-        # ("Метадані", ["tab-meta"]),
+        ("Заявка", ["tab-meta"]),
     ]
     
     list_display = ('id', 'application_status', )
@@ -284,8 +322,42 @@ class CertificateApplicationAdmin(DjangoTabbedChangeformAdmin, RemoveAdminDefaul
 
 
 
-admin.site.register(CertificateApplication, CertificateApplicationAdmin)
 
+
+class TemplateAdmin(admin.ModelAdmin):
+    list_display = ('title', 'create_date', 'author')
+    list_filter = ('title', 'create_date', 'author')
+    readonly_fields = ['file_preview']
+    exclude = ('author',)
+
+    def save_model(self, request, obj, form, change):
+        if getattr(obj, 'author', None) is None:
+            obj.author = request.user
+        obj.save()
+
+
+    def file_preview(self, obj):
+        html = 'Шаблон не завантажено'
+        filename = obj.main_file
+        if filename:
+            _name, ext = os.path.splitext(str(filename))
+            print(f'Название файла: {filename}')
+            if ext == '.pdf':
+                html = '<embed src=\'%s\' type=\'application/pdf\' width=\'850px\' height=\'800px\' />' % (
+                    obj.main_file.url)
+            elif ext in ['.jpg', '.png', '.jpeg', '.webp']:
+                html = "<img src='%s'/>" % (obj.main_file.url)
+            else:
+                html = "<a href='%s' download>Неможливо вiдобразити файл. Натиснiть для завантаження</a>" % (
+                    obj.main_file.url)
+        return format_html(html)
+
+
+
+
+
+admin.site.register(CertificateApplication, CertificateApplicationAdmin)
+admin.site.register(Template, TemplateAdmin)
 
 admin.site.index_title = "Обробка довідок"
 
